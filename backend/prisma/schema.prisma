@@ -6,3 +6,207 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum UserRole {
+  ADMIN
+  BASE_COMMANDER
+  LOGISTICS_OFFICER
+}
+
+enum EquipmentCategory {
+  WEAPON
+  VEHICLE
+  AMMUNITION
+}
+
+enum AssetStatus {
+  ACTIVE
+  ASSIGNED
+  IN_TRANSIT
+  MAINTENANCE
+  RETIRED
+}
+
+enum TransferStatus {
+  PENDING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum AuditAction {
+  PURCHASE
+  TRANSFER
+  ASSIGNMENT
+  EXPENDITURE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         UserRole
+  baseId       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  base                 Base?         @relation("UserBase", fields: [baseId], references: [id], onDelete: SetNull)
+  purchases            Purchase[]
+  initiatedTransfers   Transfer[]     @relation("TransferInitiatedBy")
+  createdAssignments   Assignment[]   @relation("AssignmentCreatedBy")
+  createdExpenditures  Expenditure[]  @relation("ExpenditureCreatedBy")
+  auditLogs            AuditLog[]
+
+  @@index([baseId])
+}
+
+model Base {
+  id        String   @id @default(cuid())
+  name      String
+  location  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                User[]        @relation("UserBase")
+  assets               Asset[]
+  purchases            Purchase[]
+  sourceTransfers      Transfer[]    @relation("TransferSourceBase")
+  destinationTransfers Transfer[]    @relation("TransferDestinationBase")
+  assignments          Assignment[]
+  expenditures         Expenditure[]
+
+  @@index([name])
+}
+
+model EquipmentType {
+  id        String            @id @default(cuid())
+  name      String
+  category  EquipmentCategory
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  assets       Asset[]
+  purchases    Purchase[]
+  transfers    Transfer[]
+  assignments  Assignment[]
+  expenditures Expenditure[]
+
+  @@unique([name, category])
+}
+
+model Asset {
+  id              String      @id @default(cuid())
+  equipmentTypeId String
+  baseId          String
+  assetTag        String      @unique
+  status          AssetStatus @default(ACTIVE)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  equipmentType EquipmentType @relation(fields: [equipmentTypeId], references: [id], onDelete: Restrict)
+  base          Base          @relation(fields: [baseId], references: [id], onDelete: Restrict)
+  assignments   Assignment[]
+
+  @@index([equipmentTypeId])
+  @@index([baseId])
+  @@index([status])
+}
+
+model Purchase {
+  id              String   @id @default(cuid())
+  baseId          String
+  equipmentTypeId String
+  quantity        Int
+  purchaseDate    DateTime @default(now())
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  base          Base          @relation(fields: [baseId], references: [id], onDelete: Restrict)
+  equipmentType EquipmentType @relation(fields: [equipmentTypeId], references: [id], onDelete: Restrict)
+  creator       User          @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([baseId])
+  @@index([equipmentTypeId])
+  @@index([purchaseDate])
+  @@index([createdBy])
+}
+
+model Transfer {
+  id                String         @id @default(cuid())
+  sourceBaseId      String
+  destinationBaseId String
+  equipmentTypeId   String
+  quantity          Int
+  status            TransferStatus @default(PENDING)
+  initiatedBy       String
+  timestamp         DateTime       @default(now())
+  createdAt         DateTime       @default(now())
+
+  sourceBase      Base          @relation("TransferSourceBase", fields: [sourceBaseId], references: [id], onDelete: Restrict)
+  destinationBase Base          @relation("TransferDestinationBase", fields: [destinationBaseId], references: [id], onDelete: Restrict)
+  equipmentType   EquipmentType @relation(fields: [equipmentTypeId], references: [id], onDelete: Restrict)
+  initiator       User          @relation("TransferInitiatedBy", fields: [initiatedBy], references: [id], onDelete: Restrict)
+
+  @@index([sourceBaseId])
+  @@index([destinationBaseId])
+  @@index([equipmentTypeId])
+  @@index([timestamp])
+  @@index([initiatedBy])
+}
+
+model Assignment {
+  id              String   @id @default(cuid())
+  assetId         String?
+  equipmentTypeId String
+  baseId          String
+  assignedTo      String
+  quantity        Int
+  assignedAt      DateTime @default(now())
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  asset         Asset?        @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  equipmentType EquipmentType @relation(fields: [equipmentTypeId], references: [id], onDelete: Restrict)
+  base          Base          @relation(fields: [baseId], references: [id], onDelete: Restrict)
+  creator       User          @relation("AssignmentCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([assetId])
+  @@index([equipmentTypeId])
+  @@index([baseId])
+  @@index([assignedAt])
+  @@index([createdBy])
+}
+
+model Expenditure {
+  id              String   @id @default(cuid())
+  baseId          String
+  equipmentTypeId String
+  quantity        Int
+  reason          String
+  expenditureDate DateTime @default(now())
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  base          Base          @relation(fields: [baseId], references: [id], onDelete: Restrict)
+  equipmentType EquipmentType @relation(fields: [equipmentTypeId], references: [id], onDelete: Restrict)
+  creator       User          @relation("ExpenditureCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([baseId])
+  @@index([equipmentTypeId])
+  @@index([expenditureDate])
+  @@index([createdBy])
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String
+  action    AuditAction
+  details   Json
+  createdAt DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
