@@ -1,0 +1,14 @@
+import type { Request, Response } from 'express';
+import { ZodError } from 'zod';
+import { createEquipmentTypeSchema, equipmentTypeIdSchema, updateEquipmentTypeSchema } from '../schemas/equipmentType.schema.js';
+import { createEquipmentType, deleteEquipmentType, EquipmentTypeServiceError, getEquipmentType, listEquipmentTypes, updateEquipmentType } from '../services/equipmentType.service.js';
+
+function parseId(request: Request, response: Response): string | null { const parsed = equipmentTypeIdSchema.safeParse(request.params.id); if (parsed.success) return parsed.data; response.status(400).json({ success: false, message: 'Invalid equipment type ID.' }); return null; }
+function validationError(response: Response, error: ZodError): void { response.status(400).json({ success: false, message: 'Invalid request data.', errors: error.flatten().fieldErrors }); }
+function serviceError(response: Response, error: unknown): void { if (error instanceof EquipmentTypeServiceError) { const status = error.code === 'NOT_FOUND' ? 404 : 409; response.status(status).json({ success: false, message: error.message }); return; } response.status(500).json({ success: false, message: 'Unable to process equipment type request.' }); }
+
+export async function create(request: Request, response: Response): Promise<void> { const parsed = createEquipmentTypeSchema.safeParse(request.body); if (!parsed.success) return validationError(response, parsed.error); try { response.status(201).json({ success: true, message: 'Equipment type created successfully', data: await createEquipmentType(parsed.data) }); } catch (error) { serviceError(response, error); } }
+export async function list(_request: Request, response: Response): Promise<void> { try { response.status(200).json({ success: true, data: await listEquipmentTypes() }); } catch (error) { serviceError(response, error); } }
+export async function getById(request: Request, response: Response): Promise<void> { const id = parseId(request, response); if (!id) return; try { response.status(200).json({ success: true, data: await getEquipmentType(id) }); } catch (error) { serviceError(response, error); } }
+export async function update(request: Request, response: Response): Promise<void> { const id = parseId(request, response); if (!id) return; const parsed = updateEquipmentTypeSchema.safeParse(request.body); if (!parsed.success) return validationError(response, parsed.error); try { response.status(200).json({ success: true, message: 'Equipment type updated successfully', data: await updateEquipmentType(id, parsed.data) }); } catch (error) { serviceError(response, error); } }
+export async function remove(request: Request, response: Response): Promise<void> { const id = parseId(request, response); if (!id) return; try { await deleteEquipmentType(id); response.status(204).send(); } catch (error) { serviceError(response, error); } }

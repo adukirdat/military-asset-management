@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import { env } from './config/env.js';
 import { authRouter } from './routes/auth.routes.js';
 import { baseRouter } from './routes/base.routes.js';
+import { equipmentTypeRouter } from './routes/equipmentType.routes.js';
+import { assetRouter } from './routes/asset.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { rbacRouter } from './routes/rbac.routes.js';
 
@@ -13,5 +15,7 @@ app.use(cors({ origin: env.frontendUrl }));
 app.use(express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/bases', baseRouter);
+app.use('/api/equipment-types', equipmentTypeRouter);
+app.use('/api/assets', assetRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/rbac', rbacRouter);
